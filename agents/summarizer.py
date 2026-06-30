@@ -1,8 +1,26 @@
 import json
 import os
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from graph.state import ResearchState
+
+
+def _get_llm():
+    """Groq primary (14,400 req/day free), Gemini as fallback."""
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    if groq_key:
+        return ChatGroq(
+            model="llama-3.3-70b-versatile",
+            groq_api_key=groq_key,
+            temperature=0.1,
+        )
+    # Fallback: Gemini
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    return ChatGoogleGenerativeAI(
+        model="gemini-1.5-flash",
+        google_api_key=os.getenv("GEMINI_API_KEY"),
+        temperature=0.1,
+    )
 
 SUMMARIZER_PROMPT = """You are a senior market research analyst. Synthesize all findings below into a comprehensive report for: "{query}"
 
@@ -74,12 +92,17 @@ def _build_search_summary(state: ResearchState) -> str:
     return "\n".join(parts)[:5000]
 
 
+def _parse_json(content: str) -> dict:
+    """Strip markdown code fences and parse JSON."""
+    content = content.strip()
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1])  # remove first/last fence lines
+    return json.loads(content)
+
+
 def summarizer_node(state: ResearchState) -> dict:
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
-        google_api_key=os.getenv("GEMINI_API_KEY"),
-        temperature=0.1,
-    )
+    llm = _get_llm()
     prompt = ChatPromptTemplate.from_template(SUMMARIZER_PROMPT)
     chain = prompt | llm
 
@@ -89,17 +112,11 @@ def summarizer_node(state: ResearchState) -> dict:
             "claims": _build_claims_text(state),
             "search_summary": _build_search_summary(state),
         })
-        # Gemini may wrap in markdown code block
-        content = result.content.strip()
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        structured_output = json.loads(content)
+        structured_output = _parse_json(result.content)
     except Exception as e:
-        print(f"[Summarizer] Parse error: {e}")
+        print(f"[Summarizer] Error: {e}")
         structured_output = {
-            "executive_summary": "Summary generation failed. Please retry.",
+            "executive_summary": f"Summary failed: {str(e)[:120]}. Please retry.",
             "key_findings": [],
             "companies": [],
             "trends": [],

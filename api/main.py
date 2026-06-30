@@ -157,27 +157,25 @@ async def start_batch(req: BatchRequest, background_tasks: BackgroundTasks):
 
 @app.post("/api/chat")
 async def follow_up_chat(req: ChatRequest):
-    """Simple follow-up Q&A using ChromaDB context from past research."""
+    """Follow-up Q&A using Groq + ChromaDB context from past research."""
     import os
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_groq import ChatGroq
 
     context_docs = chroma_client.get_similar_research(req.message, n=2)
     session = sqlite_client.get_session(req.session_id)
     current_output = session.get("output", {}) if session else {}
 
-    context = "\n\n".join(context_docs)
-    system = f"""You are a market research assistant. Answer based on this research context:
+    system = f"""You are a market research assistant. Answer concisely based on:
 
-Current Research: {current_output.get('executive_summary', '')}
+Research Summary: {current_output.get('executive_summary', 'No summary available.')}
 
-Related Past Research:
-{context}
+Related Context: {' '.join(context_docs)}
 
-Answer concisely and cite specific facts where possible."""
+Cite specific facts where possible."""
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
-        google_api_key=os.getenv("GEMINI_API_KEY"),
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        groq_api_key=os.getenv("GROQ_API_KEY"),
         temperature=0.3,
     )
     response = llm.invoke(f"{system}\n\nUser: {req.message}")
