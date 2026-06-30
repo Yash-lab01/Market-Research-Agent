@@ -95,6 +95,7 @@ for key, default in {
     "polling": False,
     "result": None,
     "history": [],
+    "chat_history": [],   # list of {"role": "user"|"assistant", "content": str}
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -102,7 +103,7 @@ for key, default in {
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 📊 Market Research Agent")
-    st.markdown("*Powered by LangGraph + Gemini + Tavily*")
+    st.markdown("*Powered by LangGraph + Groq + Tavily*")
     st.divider()
     st.markdown("**Agent Pipeline**")
     for agent in ["🧠 Planner", "🔎 Search", "🕷️ Scraper", "✅ Verifier", "🧩 Summarizer", "📄 Report"]:
@@ -311,17 +312,42 @@ with tab_research:
             # Follow-up chat
             st.divider()
             st.markdown("### 💬 Follow-up Chat")
-            user_q = st.text_input("Ask a follow-up question about this research:")
-            if st.button("Ask") and user_q:
-                with st.spinner("Thinking..."):
-                    try:
-                        cr = requests.post(f"{API}/api/chat", json={
-                            "session_id": st.session_state.session_id,
-                            "message": user_q,
-                        }, timeout=30)
-                        st.markdown(f"**Answer:** {cr.json().get('answer','')}")
-                    except Exception as e:
-                        st.error(f"Chat error: {e}")
+            st.caption("Ask multiple questions about this research. Chat history is kept for the session.")
+
+            # Clear chat button
+            if st.session_state.chat_history:
+                if st.button("🗑️ Clear chat", key="clear_chat"):
+                    st.session_state.chat_history = []
+                    st.rerun()
+
+            # Render full chat history
+            for msg in st.session_state.chat_history:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+            # Chat input — always visible, clears automatically after submit
+            user_q = st.chat_input("Ask a follow-up question...")
+            if user_q:
+                # Add user message to history and display it
+                st.session_state.chat_history.append({"role": "user", "content": user_q})
+                with st.chat_message("user"):
+                    st.markdown(user_q)
+
+                # Get answer from API
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        try:
+                            cr = requests.post(f"{API}/api/chat", json={
+                                "session_id": st.session_state.session_id,
+                                "message": user_q,
+                            }, timeout=30)
+                            answer = cr.json().get("answer", "Sorry, I couldn't get an answer.")
+                        except Exception as e:
+                            answer = f"Chat error: {e}"
+                    st.markdown(answer)
+
+                # Store assistant reply in history
+                st.session_state.chat_history.append({"role": "assistant", "content": answer})
 
 
 # ═══════════════════════════════════════════════════════════════════
