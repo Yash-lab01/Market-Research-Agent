@@ -1,0 +1,61 @@
+{
+  "name": "Batch Research Queue (Overnight)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 23 * * *" }] }
+      },
+      "id": "cron-batch",
+      "name": "Nightly Cron (11PM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:8000/api/history",
+        "options": {}
+      },
+      "id": "http-pending",
+      "name": "Get Pending Batch Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{ $json.length > 0 }}", "value2": "true" }]
+        }
+      },
+      "id": "if-has-jobs",
+      "name": "Has Jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_USER }}",
+        "toEmail": "={{ $env.SMTP_USER }}",
+        "subject": "=📊 Batch Research Complete — {{ $json.length }} reports ready",
+        "emailType": "text",
+        "message": "=Your overnight batch research is complete.\n\nReports ready: {{ $json.length }}\n\nCheck the dashboard at http://localhost:8501 to view all results.",
+        "options": {}
+      },
+      "id": "email-summary",
+      "name": "Send Summary Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [900, 200],
+      "credentials": { "smtp": { "id": "1", "name": "SMTP Account" } }
+    }
+  ],
+  "connections": {
+    "Nightly Cron (11PM)":  { "main": [[{ "node": "Get Pending Batch Jobs", "type": "main", "index": 0 }]] },
+    "Get Pending Batch Jobs":{ "main": [[{ "node": "Has Jobs?",              "type": "main", "index": 0 }]] },
+    "Has Jobs?":             { "main": [[{ "node": "Send Summary Email",     "type": "main", "index": 0 }], []] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

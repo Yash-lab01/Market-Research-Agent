@@ -1,0 +1,109 @@
+{
+  "name": "Market Research Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }] }
+      },
+      "id": "cron-1",
+      "name": "Daily Cron (8AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:8000/api/monitor",
+        "options": {}
+      },
+      "id": "http-get-jobs",
+      "name": "Get Monitor Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "=",
+        "options": {}
+      },
+      "id": "split-1",
+      "name": "Split Jobs",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "=http://host.docker.internal:8000/api/research",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: $json.query }) }}",
+        "options": {}
+      },
+      "id": "http-research",
+      "name": "Run Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "amount": 120,
+        "unit": "seconds"
+      },
+      "id": "wait-1",
+      "name": "Wait 2 min",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "url": "=http://host.docker.internal:8000/api/research/{{ $('Run Research').item.json.session_id }}",
+        "options": {}
+      },
+      "id": "http-poll",
+      "name": "Get Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{ $json.status }}", "value2": "completed" }]
+        }
+      },
+      "id": "if-done",
+      "name": "Is Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=📊 *Market Research Alert*\n\n*Query:* {{ $('Get Monitor Jobs').item.json.query }}\n\n*Summary:* {{ $json.output.executive_summary }}\n\n_Research complete — check the dashboard for the full report._",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "telegram-1",
+      "name": "Send Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1780, 200],
+      "credentials": { "telegramApi": { "id": "1", "name": "Telegram Bot" } }
+    }
+  ],
+  "connections": {
+    "Daily Cron (8AM)":    { "main": [[{ "node": "Get Monitor Jobs", "type": "main", "index": 0 }]] },
+    "Get Monitor Jobs":    { "main": [[{ "node": "Split Jobs",        "type": "main", "index": 0 }]] },
+    "Split Jobs":          { "main": [[{ "node": "Run Research",      "type": "main", "index": 0 }]] },
+    "Run Research":        { "main": [[{ "node": "Wait 2 min",        "type": "main", "index": 0 }]] },
+    "Wait 2 min":          { "main": [[{ "node": "Get Result",        "type": "main", "index": 0 }]] },
+    "Get Result":          { "main": [[{ "node": "Is Completed?",     "type": "main", "index": 0 }]] },
+    "Is Completed?":       { "main": [[{ "node": "Send Telegram Alert","type": "main", "index": 0 }], []] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

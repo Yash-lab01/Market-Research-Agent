@@ -1,0 +1,63 @@
+{
+  "name": "Telegram Research Trigger",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "telegram-trigger-1",
+      "name": "Telegram Message",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "credentials": { "telegramApi": { "id": "1", "name": "Telegram Bot" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{ $json.message.text.startsWith('/research') }}", "value2": "true" }]
+        }
+      },
+      "id": "if-research",
+      "name": "Is Research Command?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:8000/api/research",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: $json.message.text.replace('/research ', '') }) }}",
+        "options": {}
+      },
+      "id": "http-start",
+      "name": "Start Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Message').item.json.message.chat.id }}",
+        "text": "=🔍 Research started for:\n*{{ $('Telegram Message').item.json.message.text.replace('/research ', '') }}*\n\nSession ID: `{{ $json.session_id }}`\n\nI'll notify you when it's done!",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "telegram-ack",
+      "name": "Send Acknowledgement",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [900, 200],
+      "credentials": { "telegramApi": { "id": "1", "name": "Telegram Bot" } }
+    }
+  ],
+  "connections": {
+    "Telegram Message":      { "main": [[{ "node": "Is Research Command?", "type": "main", "index": 0 }]] },
+    "Is Research Command?":  { "main": [[{ "node": "Start Research",        "type": "main", "index": 0 }], []] },
+    "Start Research":        { "main": [[{ "node": "Send Acknowledgement",  "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

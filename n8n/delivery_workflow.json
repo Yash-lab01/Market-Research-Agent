@@ -1,0 +1,51 @@
+{
+  "name": "Research Report Email Delivery",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "research-complete",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "On Research Complete",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "=http://host.docker.internal:8000/api/reports/{{ $json.session_id }}/pdf",
+        "options": { "response": { "response": { "responseFormat": "file" } } }
+      },
+      "id": "http-pdf",
+      "name": "Fetch PDF Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_USER }}",
+        "toEmail": "={{ $env.SMTP_USER }}",
+        "subject": "=📊 Research Report Ready: {{ $('On Research Complete').item.json.query }}",
+        "emailType": "html",
+        "message": "=<h2>Your Market Research Report is Ready</h2><p><b>Query:</b> {{ $('On Research Complete').item.json.query }}</p><p><b>Summary:</b> {{ $('On Research Complete').item.json.executive_summary }}</p><p>The full report is attached as a PDF.</p>",
+        "attachments": "data",
+        "options": {}
+      },
+      "id": "email-1",
+      "name": "Email Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [680, 300],
+      "credentials": { "smtp": { "id": "1", "name": "SMTP Account" } }
+    }
+  ],
+  "connections": {
+    "On Research Complete": { "main": [[{ "node": "Fetch PDF Report", "type": "main", "index": 0 }]] },
+    "Fetch PDF Report":     { "main": [[{ "node": "Email Report",     "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}
