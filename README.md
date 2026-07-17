@@ -98,9 +98,11 @@ API docs (Swagger): **http://localhost:8000/docs**
 
 Requires Docker Desktop installed and running.
 
+Start n8n in detached mode:
 ```powershell
-docker compose up n8n
+docker compose up -d n8n
 ```
+*(This starts n8n in the background. Your workflows and settings are saved automatically in a persistent Docker volume, so they will start up in their last active state next time without manual execution.)*
 
 Open **http://localhost:5678** → login: `admin` / `admin123`
 
@@ -110,7 +112,7 @@ Import workflows from the `n8n/` folder:
 - `trigger_workflow.json` — start research via Telegram message
 - `batch_workflow.json` — overnight batch queue summary email
 
-For Telegram and email credential setup, see the [n8n Setup Guide](#n8n-credentials-setup) below.
+For Telegram, webhooks, and email credential setup, see the [n8n Setup Guide](#n8n-credentials--webhook-setup) below.
 
 ---
 
@@ -173,14 +175,31 @@ market-research-agent/
 
 ---
 
-## n8n Credentials Setup
+## n8n Credentials & Webhook Setup
 
 ### Telegram
 1. Message **@BotFather** on Telegram → `/newbot` → copy the Bot Token
 2. Send any message to your bot, then open:
    `https://api.telegram.org/bot<TOKEN>/getUpdates`
    Copy the `chat.id` number from the response
-3. In n8n → Credentials → Add → **Telegram** → paste Bot Token
+3. In n8n → Credentials → Add → **Telegram** → paste the Bot Token (do not use environment variable expressions here)
+
+### Webhook Tunneling (Required for Telegram Trigger)
+Telegram requires a public HTTPS URL to send webhook notifications to your local n8n instance.
+1. Run a free secure tunnel in a new terminal window:
+   ```powershell
+   npx localtunnel --port 5678
+   ```
+2. Copy the generated URL (e.g., `https://xxxx.localtunnel.me`).
+3. Add or update it in your `.env` file:
+   ```env
+   WEBHOOK_URL=https://xxxx.localtunnel.me
+   ```
+4. Recreate the n8n container to apply the environment configuration:
+   ```powershell
+   docker compose up -d n8n
+   ```
+5. In n8n, set the Telegram trigger workflow to **Active**.
 
 ### Email (Gmail)
 1. Google Account → Security → 2-Step Verification must be ON
