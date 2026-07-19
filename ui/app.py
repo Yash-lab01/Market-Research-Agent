@@ -40,7 +40,19 @@ st.markdown("""
         radial-gradient(ellipse 60% 40% at 90% 110%, rgba(139,92,246,0.12) 0%, transparent 60%);
     background-attachment: fixed;
 }
-.block-container { padding-top: 1.5rem !important; padding-bottom: 4rem !important; }
+.block-container { padding-top: 0.5rem !important; padding-bottom: 4rem !important; }
+
+/* ─── Hide default Streamlit header/toolbar so tabs are fully visible ─── */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+#MainMenu { visibility: hidden !important; }
+.stDeployButton { display: none !important; }
+div[data-testid="stToolbar"] { display: none !important; }
+div[data-testid="stDecoration"] { display: none !important; }
 
 /* ─── Scrollbar ─── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -466,6 +478,7 @@ for key, default in {
     "result": None,
     "history": [],
     "chat_history": [],
+    "jump_to_research": False,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -580,11 +593,14 @@ def render_trends(trends: list):
         d = t.get("direction", "Growing")
         th = t.get("time_horizon", "")
         cf = t.get("confidence", "")
-        badges = f"<span class='badge {dir_cls.get(d,\"badge-emerging\")}'>{d}</span>"
+        d_cls  = dir_cls.get(d, "badge-emerging")
+        th_cls = time_cls.get(th, "badge-midterm")
+        cf_cls = conf_cls.get(cf, "badge-medium")
+        badges = f"<span class='badge {d_cls}'>{d}</span>"
         if th:
-            badges += f" <span class='badge {time_cls.get(th,\"badge-midterm\")}'>{th}</span>"
+            badges += f" <span class='badge {th_cls}'>{th}</span>"
         if cf:
-            badges += f" <span class='badge {conf_cls.get(cf,\"badge-medium\")}'>{cf} confidence</span>"
+            badges += f" <span class='badge {cf_cls}'>{cf} confidence</span>"
 
         st.markdown(f"""
         <div class='trend-card'>
@@ -742,6 +758,27 @@ def render_charts(output: dict):
 tab_research, tab_report, tab_monitor, tab_history = st.tabs(
     ["🔍 Research", "📊 Report", "🔔 Monitor", "🕐 History"]
 )
+
+# Auto-switch to Research tab after history restore
+if st.session_state.get("jump_to_research"):
+    st.session_state.jump_to_research = False
+    st.markdown("""
+    <script>
+    (function() {
+        // Wait for Streamlit to finish rendering then click the first tab
+        function clickFirstTab() {
+            var tabList = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
+            if (tabList.length > 0) {
+                tabList[0].click();
+            } else {
+                setTimeout(clickFirstTab, 100);
+            }
+        }
+        setTimeout(clickFirstTab, 150);
+    })();
+    </script>
+    """, unsafe_allow_html=True)
+
 
 # ═══════════════════════════════════════════════════════════════════
 # TAB 1 — RESEARCH
@@ -1083,16 +1120,16 @@ with tab_history:
             }
             selected = st.selectbox("Restore a past report:", ["— Choose —"] + list(options.keys()))
             if selected != "— Choose —":
-                if st.button("🔄 Restore Report", type="primary"):
+                if st.button("🔄 Restore & View Report", type="primary"):
                     with st.spinner("Restoring..."):
                         try:
                             r = requests.get(f"{API}/api/research/{options[selected]}", timeout=5)
                             data = r.json()
-                            st.session_state.session_id   = options[selected]
-                            st.session_state.polling      = False
-                            st.session_state.result       = data
-                            st.session_state.chat_history = []
-                            st.success("✅ Report restored! Switch to Research or Report tab.")
+                            st.session_state.session_id     = options[selected]
+                            st.session_state.polling        = False
+                            st.session_state.result         = data
+                            st.session_state.chat_history   = []
+                            st.session_state.jump_to_research = True
                             st.rerun()
                         except Exception as err:
                             st.error(f"Failed to restore: {err}")
