@@ -6,13 +6,14 @@ from graph.state import ResearchState
 
 
 def _get_llm():
-    """Groq primary (14,400 req/day free), Gemini as fallback."""
+    """Primary: DeepSeek-R1-Distill-Llama-70B on Groq (reasoning model, better analysis).
+    Fallback: llama-3.3-70b-versatile, then Gemini."""
     groq_key = os.getenv("GROQ_API_KEY", "")
     if groq_key:
         return ChatGroq(
-            model="llama-3.3-70b-versatile",
+            model="deepseek-r1-distill-llama-70b",
             groq_api_key=groq_key,
-            temperature=0.2,
+            temperature=0.6,   # slightly higher — reasoning models benefit from it
         )
     # Fallback: Gemini
     from langchain_google_genai import ChatGoogleGenerativeAI
@@ -130,11 +131,22 @@ def _build_scraped_summary(state: ResearchState) -> str:
 
 
 def _parse_json(content: str) -> dict:
-    """Strip markdown code fences and parse JSON."""
+    """Strip DeepSeek-R1 <think>...</think> reasoning block, then markdown
+    code fences, then parse JSON."""
+    import re
     content = content.strip()
+    # DeepSeek-R1 prepends its chain-of-thought inside <think> tags — remove it
+    content = re.sub(r"<think>[\s\S]*?</think>", "", content, flags=re.IGNORECASE).strip()
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
     if content.startswith("```"):
         lines = content.split("\n")
-        content = "\n".join(lines[1:-1])
+        content = "\n".join(lines[1:-1]).strip()
+    # Handle case where model wraps output in extra text before/after the JSON
+    # Find the first { and last } to extract just the JSON object
+    start = content.find("{")
+    end   = content.rfind("}")
+    if start != -1 and end != -1:
+        content = content[start:end+1]
     return json.loads(content)
 
 
