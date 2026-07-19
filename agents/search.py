@@ -4,7 +4,7 @@ from graph.state import ResearchState
 
 
 def search_node(state: ResearchState) -> dict:
-    """Runs one Tavily search per sub-task. Uses basic depth to conserve free-tier credits."""
+    """Runs one Tavily search per sub-task with advanced depth for richer content."""
     client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
     search_results: dict = {}
 
@@ -13,11 +13,23 @@ def search_node(state: ResearchState) -> dict:
             query = f"{state['query']} - {task}"
             response = client.search(
                 query=query,
-                max_results=4,
-                search_depth="basic",          # 1 credit per call
-                include_raw_content=False,
+                max_results=6,
+                search_depth="advanced",       # richer content, ~5 credits per call
+                include_raw_content=True,      # pull actual page text
+                include_answer=True,           # include Tavily's synthesized answer
             )
-            search_results[task] = response.get("results", [])
+            results = response.get("results", [])
+            # Attach Tavily's synthesized answer as an extra result entry if available
+            tavily_answer = response.get("answer", "")
+            if tavily_answer:
+                results.insert(0, {
+                    "title": "Tavily Synthesized Answer",
+                    "url": "",
+                    "content": tavily_answer,
+                    "raw_content": tavily_answer,
+                    "score": 1.0,
+                })
+            search_results[task] = results
         except Exception as e:
             print(f"[Search] Error for '{task}': {e}")
             search_results[task] = []
