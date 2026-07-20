@@ -6,15 +6,23 @@ from graph.state import ResearchState
 
 
 def _get_llm():
-    """Primary: DeepSeek-R1-Distill-Llama-70B on Groq (reasoning model, better analysis).
-    Fallback: llama-3.3-70b-versatile, then Gemini."""
+    """Primary: openai/gpt-oss-120b on Groq (120B, high-reasoning).
+    Auto-fallback to llama-3.3-70b-versatile if decommissioned, then Gemini."""
     groq_key = os.getenv("GROQ_API_KEY", "")
     if groq_key:
-        return ChatGroq(
-            model="deepseek-r1-distill-llama-70b",
+        primary = ChatGroq(
+            model="openai/gpt-oss-120b",
             groq_api_key=groq_key,
-            temperature=0.6,   # slightly higher — reasoning models benefit from it
+            temperature=0.4,
         )
+        fallback = ChatGroq(
+            model="llama-3.3-70b-versatile",
+            groq_api_key=groq_key,
+            temperature=0.4,
+        )
+        # with_fallbacks() catches runtime errors (e.g. decommissioned models)
+        # and automatically retries with the next model in the list
+        return primary.with_fallbacks([fallback])
     # Fallback: Gemini
     from langchain_google_genai import ChatGoogleGenerativeAI
     return ChatGoogleGenerativeAI(

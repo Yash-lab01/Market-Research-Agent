@@ -4,6 +4,7 @@ Polls FastAPI for status and results. Full premium UI rewrite.
 """
 import os
 import time
+import html as html_mod
 import requests
 import streamlit as st
 import plotly.graph_objects as go
@@ -577,10 +578,11 @@ def sec(icon: str, title: str):
 # ── Rendering helpers ─────────────────────────────────────────────────────────
 def render_findings(findings: list):
     for i, f in enumerate(findings):
+        safe_f = html_mod.escape(str(f))
         st.markdown(f"""
         <div class='finding-card'>
             <div class='finding-num'>{i+1}</div>
-            <div class='finding-text'>{f}</div>
+            <div class='finding-text'>{safe_f}</div>
         </div>""", unsafe_allow_html=True)
 
 
@@ -590,52 +592,66 @@ def render_trends(trends: list):
     conf_cls = {"High": "badge-high", "Medium": "badge-medium", "Low": "badge-low"}
 
     for t in trends:
-        d = t.get("direction", "Growing")
+        d  = t.get("direction", "Growing")
         th = t.get("time_horizon", "")
         cf = t.get("confidence", "")
         d_cls  = dir_cls.get(d, "badge-emerging")
         th_cls = time_cls.get(th, "badge-midterm")
         cf_cls = conf_cls.get(cf, "badge-medium")
-        badges = f"<span class='badge {d_cls}'>{d}</span>"
+        safe_name = html_mod.escape(str(t.get("name", "")))
+        safe_desc = html_mod.escape(str(t.get("description", "")))
+        safe_d    = html_mod.escape(d)
+        safe_th   = html_mod.escape(th)
+        safe_cf   = html_mod.escape(cf)
+        badges = f"<span class='badge {d_cls}'>{safe_d}</span>"
         if th:
-            badges += f" <span class='badge {th_cls}'>{th}</span>"
+            badges += f" <span class='badge {th_cls}'>{safe_th}</span>"
         if cf:
-            badges += f" <span class='badge {cf_cls}'>{cf} confidence</span>"
+            badges += f" <span class='badge {cf_cls}'>{safe_cf} confidence</span>"
 
         st.markdown(f"""
         <div class='trend-card'>
             <div class='trend-card-header'>
-                <span class='trend-name'>{t.get("name","")}</span>
+                <span class='trend-name'>{safe_name}</span>
             </div>
             <div class='trend-meta'>{badges}</div>
-            <div class='trend-desc'>{t.get("description","")}</div>
+            <div class='trend-desc'>{safe_desc}</div>
         </div>""", unsafe_allow_html=True)
 
 
 def render_companies(companies: list):
     pos_cls = {"Leader": "badge-leader", "Challenger": "badge-challenger", "Niche Player": "badge-niche"}
-    html = "<div class='company-grid'>"
+    out = "<div class='company-grid'>"
     for c in companies:
-        pos = c.get("market_position", "")
-        rev = c.get("revenue_estimate", "")
-        html += f"""
+        pos     = c.get("market_position", "")
+        rev     = c.get("revenue_estimate", "")
+        notable = c.get("notable", "")
+        pos_badge = pos_cls.get(pos, "badge-niche")
+        safe_name    = html_mod.escape(str(c.get("name", "")))
+        safe_desc    = html_mod.escape(str(c.get("description", "")))
+        safe_pos     = html_mod.escape(pos)
+        safe_rev     = html_mod.escape(str(rev))
+        safe_notable = html_mod.escape(str(notable))
+        rev_html     = f"<span class='badge badge-niche'>{safe_rev}</span>" if rev and rev != "Private/Unknown" else ""
+        notable_html = f"<div class='company-notable'>💡 {safe_notable}</div>" if notable else ""
+        out += f"""
         <div class='company-card'>
-            <div class='company-name'>{c.get("name","")}</div>
-            <div class='company-desc'>{c.get("description","")}</div>
+            <div class='company-name'>{safe_name}</div>
+            <div class='company-desc'>{safe_desc}</div>
             <div class='company-meta'>
-                <span class='badge {pos_cls.get(pos,"badge-niche")}'>{pos}</span>
-                {f"<span class='badge badge-niche'>{rev}</span>" if rev and rev != "Private/Unknown" else ""}
+                <span class='badge {pos_badge}'>{safe_pos}</span>
+                {rev_html}
             </div>
-            {f"<div class='company-notable'>💡 {c.get('notable','')}</div>" if c.get("notable") else ""}
+            {notable_html}
         </div>"""
-    html += "</div>"
-    st.markdown(html, unsafe_allow_html=True)
+    out += "</div>"
+    st.markdown(out, unsafe_allow_html=True)
 
 
 def render_swot(swot: dict):
     def card(css, icon, title, key):
         items = swot.get(key, [])
-        lis = "".join(f"<li>{item}</li>" for item in items)
+        lis = "".join(f"<li>{html_mod.escape(str(item))}</li>" for item in items)
         return f"<div class='swot-card {css}'><div class='swot-title'>{icon} {title}</div><ul class='swot-list'>{lis}</ul></div>"
 
     html = "<div class='swot-grid'>"
